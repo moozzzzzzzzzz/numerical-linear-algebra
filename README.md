@@ -47,3 +47,4 @@
 | `精度随迭代次数q的变化.py` | 实验2：幂迭代次数 q 对精度的影响（对比奇异值快/慢衰减两种情形） |
 | `exp2_poweriteration.png` | 实验2结果图 |
 | `SVD.pdf` / `SVD.tex` | 用 LaTeX 撰写的随机化 SVD 学习笔记，包含算法推导、误差分析与实验总结 |
+| `exp3_timing.png` | 实验3随机SVD与精确SVD运行所需时间结果图 |
