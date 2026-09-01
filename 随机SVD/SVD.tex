@@ -1,0 +1,486 @@
+% !TeX program = xelatex
+% !TeX encoding = UTF-8
+
+\documentclass{article}
+\usepackage{ctex}
+
+\usepackage{geometry}%调整页面边距
+\geometry{a4paper, left=3cm, right=3cm, top=2.5cm, bottom=2.5cm}
+
+\usepackage{graphicx} % 插图  % 插入图片必备
+\usepackage{float}      % 让图片固定位置不乱跑
+
+\usepackage{enumerate} % 自定义列表样式
+
+\usepackage{amsmath}%支持各种复杂公式（分式、求和、积分、矩阵…）
+\usepackage{amssymb}%提供超多数学符号（∀、∃、∈、⇒、⊂、ℝ、ℕ…
+\usepackage{amsthm}%定义定理、引理、证明环境（写数学证明用）
+
+   % 数学公式
+\usepackage{multirow}   % 合并单元格
+\usepackage{booktabs}   % 更美观的表格线（可选，提升颜值）
+\usepackage{siunitx}    % 科学计数法排版（可选）
+
+% 算法环境
+\usepackage{algorithm}% 1. 装“算法框框”
+\usepackage{algorithmic}% 2. 装“伪代码语法”
+\floatname{algorithm}{算法}% 3. 把标题从 Algorithm 改成 算法
+%\makeatletter
+%\renewcommand{\fnum@algorithm}{\fname@algorithm}		% 算法不编号
+%\renewcommand{\fnum@algorithm}{算法}						% 不编号且标题变为 “算法 标题文字”
+%\makeatother
+% 4. 把伪代码开头的 INPUT / OUTPUT 改成中文样式
+\renewcommand{\algorithmicrequire}{\textbf{Input:}}
+\renewcommand{\algorithmicensure}{\textbf{Output:}}
+
+
+\usepackage{listings}% 代码高亮核心包
+\usepackage{xcolor}% 颜色包（让代码有颜色）
+
+\lstset{
+	language=Matlab,%所用代码语言
+	basicstyle=\ttfamily\small,%代码字体：等线体+小一号
+	keywordstyle=\color{blue},%关键字蓝色
+	commentstyle=\color{green!70},%注释绿色
+	stringstyle=\color{red},%字符串红色
+	frame=single,%给代码加边框
+	breaklines=true,%代码太长自动换行
+	showstringspaces=false,  % 关键：不显示字符串里的空格符号
+	showspaces=false,        % 关键：不显示代码里的空格符号
+	numbers=left,%行号显示在左边
+	numberstyle=\tiny,%行号字体很小
+	stepnumber=1,%每行都显示行号
+	numbersep=5pt%行号与代码距离
+}
+
+\usepackage{hyperref}%给 LaTeX 文档加超链接功能
+\hypersetup{colorlinks,citecolor=black,filecolor=black,linkcolor=black,urlcolor=black}
+%colorlinks：启用彩色链接（而不是方框） citecolor=black：引用文献颜色 = 黑色 filecolor=black：文件链接颜色 = 黑色 linkcolor=black：内部链接（目录、章节、公式）颜色 = 黑色 urlcolor=black：网址链接颜色 = 黑色
+
+
+\title{随机SVD的问题探索}
+\author{241840143 刘嘉瑶}
+
+
+\begin{document}
+
+\maketitle%生成标题块
+
+\section{问题}
+\noindent%本段开头不缩进，顶格写
+传统精确SVD算法计算复杂度高，需要时间大，效率低。随机SVD对其进行了改进，通过随机采样，正交基提取和低维精确分解，在尽可能控制精度损失的前提下降低了计算量，提高了效率。对于随机SVD算法我们将探究以下问题：
+
+\begin{enumerate}
+	
+	\item 
+	过采样p对于算法精度的影响是什么呢？
+	
+	\item
+	幂迭代次数q对病态矩阵，奇异值衰减缓慢矩阵的精度提升效果是什么呢？
+	
+	\item
+	不同规模下随机SVD和精确SVD的对比情况如何呢？
+\end{enumerate}
+
+
+
+\section{算法思路}
+\noindent 
+对于大规模矩阵 \(A\in \mathbb R^{m\times n}\)，若仅需要前 \(k\) 个主奇异分量，无需对整矩阵做昂贵SVD。随机SVD通过随机投影探测列空间，将高维矩阵压缩至低维子空间，再进行精确SVD。\\
+
+\noindent
+\textbf{算法流程：}
+\begin{enumerate}
+	\item 生成随机高斯探测矩阵 \(\Omega\in\mathbb R^{n\times (k+p)}\)；
+	
+	\item 构造采样矩阵 \(Y=A\Omega\)，捕捉矩阵主要列空间
+	；
+	\item  幂迭代 \(Y\leftarrow AA^\top Y\) 压制微小奇异分量干扰；
+	
+	\item 对 \(Y\) 做QR分解得到列空间正交基 \(Q\)
+	
+	\item 压缩得到小矩阵 \(B=Q^\top A\)，对B做精确SVD；
+	
+	\item 将低维奇异向量映射回原空间，得到近似分解结果
+
+\end{enumerate}
+
+\noindent
+\textbf{关键参数作用}
+
+
+\begin{enumerate}
+	\item 
+	过采样数p:采样维度 \(l=k+p\)，弥补随机采样的统计误差，提升子空间捕捉稳定性；
+	\item 
+	幂迭代q:放大大奇异值、压制小奇异值噪声，显著提升缓衰减奇异矩阵的分解精度
+\end{enumerate}
+
+
+
+
+
+相关的代码见附录部分.
+
+
+
+
+
+
+
+\section{结果分析}%重点（误差图、结果图、分析算法的收敛性（速度）、内存使用（时间、空间）、计算量、稳定性
+
+\subsection{过采样p对算法精度的影响}
+
+\noindent
+
+
+本次实验中，我们对秩为20的低秩矩阵做p=0,1,2,5,10,20,40的过采样，通过多次实验取平均，得到的相对误差表格如下所示：
+
+\begin{table}[htbp]
+	\centering
+	\caption{不同参数$p$下的平均相对误差}
+	\begin{tabular}{cc}
+		\hline
+		$p$ & 平均相对误差 \\
+		\hline
+		0  & $1.45\times 10^{-14}$ \\
+		1  & $7.91\times 10^{-15}$ \\
+		2  & $2.67\times 10^{-15}$ \\
+		5  & $2.18\times 10^{-15}$ \\
+		10 & $2.15\times 10^{-15}$ \\
+		20 & $2.21\times 10^{-15}$ \\
+		40 & $2.06\times 10^{-15}$ \\
+		\hline
+	\end{tabular}
+\end{table}
+
+虽然计算结果中平均相对误差均接近机器精度，但我们发现，由于我们采用的矩阵是低秩矩阵，只要采样维度 \(l\ge k\)，随机采样已经很好的模拟了A的列空间，理论上随机SVD可以精确恢复A,误差直接下探到机器舍入误差\(10^{-15}\)。如果想要看到p=0误差大，p增大误差下降的实验效果，可以考虑先生成20个主要奇异值，后续再生成衰减的小奇异值。
+
+而对于现实情况中真实缓衰减矩阵，p=0时误差最大，随着p增大误差快速下降，p>秩后精度趋于饱和，不再明显优化。
+
+
+
+\subsection{幂迭代次数对精度的影响}
+
+\noindent
+
+
+幂迭代通过 \(AA^\top\) 幂次放大主导奇异分量、压制微小噪声分量。实验可见：注意此处应该考虑到\(AA^\top\)的奇异值是A的奇异值平方。大奇异值随着幂次增大而不断增大，小的则被削弱了。如果直接用Y迭代数值量级会爆炸，数值溢出，所以我们最好每一步幂迭代后做归一化处理。
+
+分别对缓慢衰减和快速衰减奇异值的矩阵进行误差分析，得到表格如下：
+
+\begin{table}[H]
+	\centering
+	\caption{不同幂迭代次数下随机SVD的相对重建误差}
+	\label{tab:power_iter_err}
+	\begin{tabular}{ccc}
+		\hline
+		幂迭代次数 $q$ & 奇异值快速衰减 & 奇异值缓慢衰减 \\
+		\hline
+		0  & $3.758\times 10^{-15}$ & $2.374\times 10^{-15}$ \\
+		1  & $2.737\times 10^{-6}$  & $3.054\times 10^{-15}$ \\
+		2  & $9.727\times 10^{-16}$ & $2.805\times 10^{-15}$ \\
+		3  & $8.948\times 10^{-16}$ & $1.909\times 10^{-15}$ \\
+		5  & $1.407\times 10^{-15}$ & $2.023\times 10^{-15}$ \\
+		10 & $8.247\times 10^{-15}$ & $1.919\times 10^{-15}$ \\
+		\hline
+	\end{tabular}
+\end{table}
+
+奇异值缓慢衰减矩阵在本实验设置下，即使 \(q=0\) 误差已经接近机器精度；奇异值快速衰减矩阵在 \(q=1\) 出现一个异常跳变，继续增大幂迭代次数后误差回到机器精度量级。
+
+
+\subsection{随机SVD与精确SVD的时间对比}
+
+本实验分别构造奇异值快速衰减、奇异值缓慢衰减两类低秩矩阵，在固定过采样数 \(p=10\) 的条件下，改变幂迭代次数 q，对比随机 SVD 的相对重建误差，实验结果如表所示：
+
+
+\begin{table}[H]
+	\centering
+	\caption{精确SVD与随机SVD运行时间对比(单位：秒)}
+	\label{tab:speed_compare}
+	\begin{tabular}{cSS}
+		\hline
+		{$n$} & {精确SVD / s} & {随机SVD / s} \\
+		\hline
+		500    & 0.072   & 0.0128 \\
+		1000   & 0.211   & 0.0206 \\
+		2000   & 1.875   & 0.0461 \\
+		5000   & 26.096  & 0.3536 \\
+		10000  & 247.949 & 0.6086 \\
+		\hline
+	\end{tabular}
+\end{table}
+
+随着矩阵规模 n 不断增大，传统精确 SVD 的计算时间急剧膨胀，\(n=10000\) 时耗时达到 247.949 秒；而随机 SVD 时间增长十分平缓，仅为 0.6086 秒。这是因为标准 SVD 算法时间复杂度约为 \(O(n^3)\)，随机 SVD 通过随机投影将问题压缩至低维子空间，主要计算开销集中在小规模矩阵分解，因此在处理大规模矩阵、只需要前若干个主奇异分量的场景下具备巨大速度优势。
+
+
+\subsection{其他}
+
+\noindent
+
+\begin{enumerate}
+	\item 随机化SVD能够以极低计算代价实现大规模矩阵的近似奇异值分解，精度可控；
+	
+	\item 过采样参数 p 能够有效降低随机投影带来的统计误差，在真实数据场景提升显著；
+	
+	\item  幂迭代 q 可以极大改善病态、缓衰减奇异矩阵的分解精度，是随机SVD的核心优化策略；
+	
+	\item 对于理想严格低秩矩阵，随机SVD天然精度极高，参数优化效果不明显
+	
+
+	
+\end{enumerate}
+
+
+
+
+
+\newpage
+\section{附录: 程序代码}
+
+\textbf{说明：}展示关键算法部分的代码及算例即可．
+
+\lstset{
+    numbers=left,
+    language=python,
+    keywordstyle=\color{blue!100},
+    commentstyle=\color{green!50!blue!50!},
+    frame=shadowbox，%阴影
+    escapeinside=''，%英文分号输入中文
+    xleftmargin=2em，xrightmargin=2em,aboveskip=1em,
+    framexleftmargin=2em,
+    extendedchars=false}
+
+	% ===================== 附录：代码清单 =====================
+	\appendix % 开启附录模式，章节号变为 A、B、C...
+	\section{PYTHON代码清单} % 附录总标题
+	\subsection{精度随采样p的变化}
+	\begin{lstlisting}[ label={lst:ieee754}]
+import matplotlib.pyplot as plt
+import numpy as np
+
+#基础随机SVD
+def randomized_svd(A,k,p=10,q=0):
+# A:m×n矩阵
+# k:目标秩
+# p:过采样数，通常取k的1/3到1倍
+# q:幂迭代次数,提高精度用
+m,n=A.shape#m，n很大，我们只想要前k个主奇异值。牺牲一点点精度
+l=k+p
+omega=np.random.randn(n,l)
+Y=A@omega
+for _ in range(q):  #
+Y=A@(A.T@Y)     #AA.T的奇异值是A的奇异值平方。大奇异值随着幂次增大而不断增大，小的则被削弱了
+Y, _ = np.linalg.qr(Y)#我们发现如果直接用Y迭代数值量级会爆炸，数值溢出，所以我们最好每一步幂迭代后做归一化处理
+Q,_=np.linalg.qr(Y)
+B=Q.T@A#把A投影到低维子空间m*n到l*n
+U_tilde, S, Vt = np.linalg.svd(B, full_matrices=False)
+U=Q@U_tilde
+return U[:,:k],S[:k],Vt[:k,:]
+
+#过采样数p对精度的影响
+def run_experiment1():
+
+np.random.seed(42)
+m,n,rank=2000,2000,20
+U_true=np.linalg.qr(np.random.randn(m,rank))[0]
+V_true=np.linalg.qr(np.random.randn(n,rank))[0]
+S_true=np.logspace(1,0,rank)
+A=U_true @ np.diag(S_true) @ V_true.T 
+
+p_list=[0,1,2,5,10,20,40]
+errors = []
+
+for p in p_list:
+# 多次实验取平均，减少随机性影响
+errs = []
+for trial in range(20):
+U,S,Vt=randomized_svd(A,k=rank,p=p,q=0)
+A_approx=U @ np.diag(S) @ Vt
+err=np.linalg.norm(A-A_approx)/np.linalg.norm(A)
+errs.append(err)
+errors.append(np.mean(errs))
+print(f"p={p:>3}:平均相对误差 = {np.mean(errs):.2e}")
+
+
+plt.figure(figsize=(7, 5))
+plt.semilogy(p_list, errors, 'o-', linewidth=2, markersize=8)
+plt.xlabel('过采样数 p', fontsize=12)
+plt.ylabel('相对误差', fontsize=12)
+plt.title('过采样对随机化SVD精度的影响（k=20）', fontsize=14)
+plt.grid(True, alpha=0.3)
+plt.tight_layout()
+plt.savefig('exp1_oversampling.png', dpi=150)
+plt.show()
+
+print("\n结论：当 p=0 时误差较大，随着p增大误差迅速下降，"
+"p超过5-10后误差不再明显改善。")
+print("这验证了过采样对随机算法稳定性的重要性。")
+
+run_experiment1()
+
+
+\end{lstlisting}
+
+
+\subsection{幂迭代次数q对精度的影响}
+\begin{lstlisting}[ label={lst:ieee754}]
+	
+	import matplotlib.pyplot as plt
+	import numpy as np
+	plt.rcParams['font.sans-serif'] = ['Microsoft YaHei']  # 或 'SimHei'
+	plt.rcParams['axes.unicode_minus'] = False             # 负号正常显示（否则-号也变方块）
+	
+	
+	#基础随机SVD
+	def randomized_svd(A,k,p=10,q=0):
+	# A:m×n矩阵
+	# k:目标秩
+	# p:过采样数，通常取k的1/3到1倍
+	# q:幂迭代次数,提高精度用
+	m,n=A.shape#m，n很大，我们只想要前k个主奇异值。牺牲一点点精度
+	l=k+p
+	omega=np.random.randn(n,l)
+	Y=A@omega
+	for _ in range(q):  #
+	Y=A@(A.T@Y)     #AA.T的奇异值是A的奇异值平方。大奇异值随着幂次增大而不断增大，小的则被削弱了
+	Y, _ = np.linalg.qr(Y)#我们发现如果直接用Y迭代数值量级会爆炸，数值溢出，所以我们最好每一步幂迭代后做归一化处理
+	Q,_=np.linalg.qr(Y)
+	B=Q.T@A#把A投影到低维子空间m*n到l*n
+	U_tilde, S, Vt = np.linalg.svd(B, full_matrices=False)
+	U=Q@U_tilde
+	return U[:,:k],S[:k],Vt[:k,:]
+	
+	
+	
+	
+	def run_experiment2():
+	
+	np.random.seed(42)
+	m, n, rank = 2000, 2000, 20
+	U_true = np.linalg.qr(np.random.randn(m, rank))[0]
+	V_true = np.linalg.qr(np.random.randn(n, rank))[0]
+	
+	S_true = np.logspace(0, -6, rank)  
+	A_fast = U_true @ np.diag(S_true) @ V_true.T
+	
+	
+	S_slow = np.linspace(1, 0.8, rank)
+	A_slow = U_true @ np.diag(S_slow) @ V_true.T
+	
+	q_list = [0, 1, 2, 3, 5, 10]
+	err_fast, err_slow = [], []
+	
+	for q in q_list:
+	U, S, Vt = randomized_svd(A_fast, k=rank, p=10, q=q)
+	err_fast.append(np.linalg.norm(A_fast - U@np.diag(S)@Vt) / np.linalg.norm(A_fast))
+	
+	U, S, Vt = randomized_svd(A_slow, k=rank, p=10, q=q)
+	err_slow.append(np.linalg.norm(A_slow - U@np.diag(S)@Vt) / np.linalg.norm(A_slow))
+	
+	plt.figure(figsize=(7, 5))
+	plt.semilogy(q_list, err_fast, 'o-', label='奇异值快速衰减', linewidth=2)
+	plt.semilogy(q_list, err_slow, 's-', label='奇异值缓慢衰减', linewidth=2)
+	plt.xlabel('幂迭代次数 q', fontsize=12)
+	plt.ylabel('相对误差', fontsize=12)
+	plt.title('幂迭代对精度的影响', fontsize=14)
+	plt.legend(fontsize=11)
+	plt.grid(True, alpha=0.3)
+	plt.tight_layout()
+	plt.savefig('exp2_poweriteration.png', dpi=150)
+	plt.show()
+	
+	print("结论：奇异值衰减快时q=0就够了；衰减慢时q>0显著改善精度。")
+	
+	
+\end{lstlisting}
+
+
+	
+\subsection{随机SVD与精确SVD的对比}
+\begin{lstlisting}[ label={lst:ieee754}]
+
+import numpy as np
+import time
+import matplotlib.pyplot as plt
+plt.rcParams['font.sans-serif'] = ['Microsoft YaHei']  # 或 'SimHei'
+plt.rcParams['axes.unicode_minus'] = False             # 负号正常显示（否则-号也变方块）
+
+def randomized_svd(A,k,p=10,q=0):
+
+m,n=A.shape
+l=k+p
+omega=np.random.randn(n,l)
+Y=A@omega
+for _ in range(q):  
+Y=A@(A.T@Y)     
+Y, _ = np.linalg.qr(Y)
+Q,_=np.linalg.qr(Y)
+B=Q.T@A
+U_tilde, S, Vt = np.linalg.svd(B, full_matrices=False)
+U=Q@U_tilde
+return U[:,:k],S[:k],Vt[:k,:]
+
+
+def run_expermient3():
+np.random.seed(42)
+n_list=[500,1000,2000,5000,10000]
+t_exact,t_random=[],[]
+
+for n in n_list:
+A=np.random.randn(n,n)
+k=50
+
+t0=time.perf_counter()
+np.linalg.svd(A,full_matrices=False)
+t_exact.append(time.perf_counter()-t0)
+
+t1=time.perf_counter()
+randomized_svd(A,k=k,p=10,q=1)
+t_random.append(time.perf_counter()-t1)
+
+print(f"n={n:>6}: 精确SVD {t_exact[-1]:.3f}s, 随机SVD {t_random[-1]:.4f}s")
+
+plt.figure(figsize=(7, 5))
+plt.loglog(n_list, t_exact, 'o-', label='精确SVD', linewidth=2)
+plt.loglog(n_list, t_random, 's-', label='随机SVD (k=50)', linewidth=2)
+plt.xlabel('矩阵规模 n', fontsize=12)
+plt.ylabel('运行时间 (秒)', fontsize=12)
+plt.title('随机SVD vs 精确SVD 运行时间', fontsize=14)
+plt.legend(fontsize=11)
+plt.grid(True, alpha=0.3)
+plt.tight_layout()
+plt.savefig('exp3_timing.png', dpi=150)
+plt.show()
+
+run_expermient3()
+
+
+
+
+\end{lstlisting}
+
+	
+\end{document}
+\newpage
+%可以观看~FiddieMath~视频~\url{https://www.bilibili.com/video/BV1JF411W797}
+
+\begin{center}
+\includegraphics[width=0.9\textwidth]{pics/14-Figure10-1.png}
+\end{center}
+
+
+
+\newpage
+这是一个CTEX的utf-8编码例子，
+{\kaishu 这里是楷体显示}，
+{\songti 这里是宋体显示}，
+{\heiti 这里是黑体显示}，
+{\fangsong 这里是仿宋显示}。
+
+\bibliographystyle{unsrt}
+\bibliography{Reference}
+
+\end{document}
